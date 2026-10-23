@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Subject } from "@/lib/types";
 import { Page, buttonClass, inputClass } from "@/components/ui";
+import { ReviewCard } from "@/components/ReviewCard";
 
 const COLORS = ["#e21b3c", "#1368ce", "#d89e00", "#26890c", "#46178f", "#0aa3a3", "#e0598b"];
 const EMOJIS = ["📐", "🧪", "🌍", "📜", "📖", "🧬", "🗣️", "🎨", "💻", "⚽"];
@@ -54,20 +55,12 @@ export default function Home() {
       <header className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-black">QuizCasa</h1>
         <div className="flex gap-3 text-sm font-bold">
-          <Link href="/panel" className="text-k-purple dark:text-violet-300">📊 Progreso</Link>
+          <Link href="/panel" className="text-violet-300">📊 Progreso</Link>
           <button onClick={logout} className="text-muted">Salir</button>
         </div>
       </header>
 
-      <Link
-        href="/jugar?modo=repaso"
-        className={`block rounded-2xl p-5 mb-6 text-white shadow-lg ${dueCount ? "bg-k-green" : "bg-gray-400 pointer-events-none"}`}
-      >
-        <p className="text-sm font-bold opacity-90">Repaso de hoy</p>
-        <p className="text-2xl font-black">
-          {dueCount ? `🔥 ${dueCount} preguntas por repasar` : "✅ Nada pendiente hoy"}
-        </p>
-      </Link>
+      <ReviewCard dueCount={dueCount} />
 
       <h2 className="font-black text-xl mb-3">Materias</h2>
       <div className="grid grid-cols-2 gap-3">
@@ -84,7 +77,7 @@ export default function Home() {
         ))}
         <button
           onClick={() => setAdding(true)}
-          className="rounded-2xl border-2 border-dashed border-black/20 dark:border-white/20 aspect-[4/3] font-bold text-muted"
+          className="rounded-2xl border-2 border-dashed border-white/20 aspect-[4/3] font-bold text-muted"
         >
           + Nueva materia
         </button>
@@ -96,7 +89,7 @@ export default function Home() {
           <div className="flex flex-wrap gap-2">
             {EMOJIS.map((em) => (
               <button type="button" key={em} onClick={() => setEmoji(em)}
-                className={`text-2xl rounded-lg p-1 ${emoji === em ? "bg-black/10 dark:bg-white/20" : ""}`}>
+                className={`text-2xl rounded-lg p-1 ${emoji === em ? "bg-white/20" : ""}`}>
                 {em}
               </button>
             ))}
