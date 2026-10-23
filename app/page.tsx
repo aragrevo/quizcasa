@@ -1,103 +1,119 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { Subject } from "@/lib/types";
+import { Page, buttonClass, inputClass } from "@/components/ui";
+
+const COLORS = ["#e21b3c", "#1368ce", "#d89e00", "#26890c", "#46178f", "#0aa3a3", "#e0598b"];
+const EMOJIS = ["📐", "🧪", "🌍", "📜", "📖", "🧬", "🗣️", "🎨", "💻", "⚽"];
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const supabase = createClient();
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [dueCount, setDueCount] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState(EMOJIS[0]);
+  const [color, setColor] = useState(COLORS[0]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  async function load() {
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from("subjects").select("*").order("created_at"),
+      supabase
+        .from("questions")
+        .select("id", { count: "exact", head: true })
+        .lte("next_review", new Date().toISOString()),
+    ]);
+    setSubjects(data ?? []);
+    setDueCount(count ?? 0);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function addSubject(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await supabase.from("subjects").insert({ name: name.trim(), emoji, color });
+    setName("");
+    setAdding(false);
+    load();
+  }
+
+  async function logout() {
+    await supabase.auth.signOut();
+    location.href = "/login";
+  }
+
+  return (
+    <Page>
+      <header className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-black">QuizCasa</h1>
+        <div className="flex gap-3 text-sm font-bold">
+          <Link href="/panel" className="text-k-purple dark:text-violet-300">📊 Progreso</Link>
+          <button onClick={logout} className="text-muted">Salir</button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </header>
+
+      <Link
+        href="/jugar?modo=repaso"
+        className={`block rounded-2xl p-5 mb-6 text-white shadow-lg ${dueCount ? "bg-k-green" : "bg-gray-400 pointer-events-none"}`}
+      >
+        <p className="text-sm font-bold opacity-90">Repaso de hoy</p>
+        <p className="text-2xl font-black">
+          {dueCount ? `🔥 ${dueCount} preguntas por repasar` : "✅ Nada pendiente hoy"}
+        </p>
+      </Link>
+
+      <h2 className="font-black text-xl mb-3">Materias</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {subjects.map((s) => (
+          <Link
+            key={s.id}
+            href={`/materia/${s.id}`}
+            className="rounded-2xl p-4 text-white shadow-md active:scale-95 transition aspect-[4/3] flex flex-col justify-between"
+            style={{ background: s.color }}
+          >
+            <span className="text-4xl">{s.emoji}</span>
+            <span className="font-black text-lg leading-tight">{s.name}</span>
+          </Link>
+        ))}
+        <button
+          onClick={() => setAdding(true)}
+          className="rounded-2xl border-2 border-dashed border-black/20 dark:border-white/20 aspect-[4/3] font-bold text-muted"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          + Nueva materia
+        </button>
+      </div>
+
+      {adding && (
+        <form onSubmit={addSubject} className="mt-4 bg-card rounded-2xl p-4 space-y-3 animate-pop">
+          <input autoFocus className={inputClass} placeholder="Ej: Matemáticas" value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="flex flex-wrap gap-2">
+            {EMOJIS.map((em) => (
+              <button type="button" key={em} onClick={() => setEmoji(em)}
+                className={`text-2xl rounded-lg p-1 ${emoji === em ? "bg-black/10 dark:bg-white/20" : ""}`}>
+                {em}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {COLORS.map((c) => (
+              <button type="button" key={c} onClick={() => setColor(c)} aria-label={c}
+                className={`size-8 rounded-full ${color === c ? "ring-4 ring-offset-2 ring-black/30" : ""}`}
+                style={{ background: c }} />
+            ))}
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => setAdding(false)} className="px-4 py-2 font-bold text-muted">Cancelar</button>
+            <button className={buttonClass}>Crear</button>
+          </div>
+        </form>
+      )}
+    </Page>
   );
 }
