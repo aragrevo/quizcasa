@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QuizCasa
 
-## Getting Started
+App tipo Kahoot para estudiar: subes fotos de los apuntes de un tema, Claude genera un quiz,
+y el repaso espaciado vuelve a mostrar lo que se falló.
 
-First, run the development server:
+## Puesta en marcha (una sola vez)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Supabase** (gratis): crea un proyecto en https://supabase.com.
+   - SQL Editor → pega y ejecuta `supabase/migrations/0001_init.sql`.
+   - Authentication → URL Configuration: pon `http://localhost:3000` como Site URL
+     (y luego la URL de Vercel) y agrega `<url>/auth/callback` en Redirect URLs.
+2. **Claude**: crea una API key en https://platform.claude.com.
+3. Copia `.env.example` a `.env.local` y completa las tres variables.
+4. `npm install && npm run dev` → abre http://localhost:3000.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usarlo desde el celular
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Despliega en Vercel (`npx vercel`, con las mismas variables de entorno) y abre la URL en el
+celular → "Agregar a pantalla de inicio". Queda como una app con acceso a la cámara.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+En Vercel define también `CRON_SECRET`. El cron de `vercel.json` llama a `/api/keepalive` una vez
+al día para que Supabase no pause el proyecto gratis cuando la app pasa una semana sin usarse.
 
-## Learn More
+## Cómo funciona
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `app/api/generate/route.ts`: envía las fotos nuevas del tema a Claude (`claude-opus-5-5`)
+  y guarda las preguntas validadas. Cada foto se usa una sola vez para no repetir preguntas.
+- `lib/prompts.ts`: instrucciones y esquema del quiz (opción múltiple y verdadero/falso).
+- `lib/leitner.ts`: repaso espaciado. Si acierta, la pregunta vuelve en 1, 3, 7, 14 y 30 días; si falla, vuelve mañana.
+- `/jugar?tema=…` juega un tema (de fácil a difícil); `/jugar?modo=repaso` juega lo que toca repasar hoy.
+- `/panel`: aciertos por materia, temas flojos y preguntas más falladas.
