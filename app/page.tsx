@@ -6,13 +6,16 @@ import { createClient } from "@/lib/supabase/client";
 import type { Subject } from "@/lib/types";
 import { Page, buttonClass, inputClass } from "@/components/ui";
 import { ReviewCard } from "@/components/ReviewCard";
+import { SubjectCard } from "@/components/SubjectCard";
 
 const COLORS = ["#e21b3c", "#1368ce", "#d89e00", "#26890c", "#46178f", "#0aa3a3", "#e0598b"];
+type SubjectRow = Subject & { topics: { questions: { count: number }[] }[] };
+
 const EMOJIS = ["📐", "🧪", "🌍", "📜", "📖", "🧬", "🗣️", "🎨", "💻", "⚽"];
 
 export default function Home() {
   const supabase = createClient();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [dueCount, setDueCount] = useState(0);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -21,13 +24,13 @@ export default function Home() {
 
   async function load() {
     const [{ data }, { count }] = await Promise.all([
-      supabase.from("subjects").select("*").order("created_at"),
+      supabase.from("subjects").select("*, topics(questions(count))").order("created_at"),
       supabase
         .from("questions")
         .select("id", { count: "exact", head: true })
         .lte("next_review", new Date().toISOString()),
     ]);
-    setSubjects(data ?? []);
+    setSubjects((data as SubjectRow[]) ?? []);
     setDueCount(count ?? 0);
   }
 
@@ -62,29 +65,29 @@ export default function Home() {
 
       <ReviewCard dueCount={dueCount} />
 
-      <h2 className="font-black text-xl mb-3">Materias</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted mb-3">Tus materias</p>
+      <div className="grid gap-3 sm:grid-cols-2">
         {subjects.map((s) => (
-          <Link
+          <SubjectCard
             key={s.id}
-            href={`/materia/${s.id}`}
-            className="rounded-2xl p-4 text-white shadow-md active:scale-95 transition aspect-[4/3] flex flex-col justify-between"
-            style={{ background: s.color }}
-          >
-            <span className="text-4xl">{s.emoji}</span>
-            <span className="font-black text-lg leading-tight">{s.name}</span>
-          </Link>
+            subject={s}
+            topics={s.topics.length}
+            questions={s.topics.reduce((sum, t) => sum + (t.questions[0]?.count ?? 0), 0)}
+          />
         ))}
-        <button
-          onClick={() => setAdding(true)}
-          className="rounded-2xl border-2 border-dashed border-white/20 aspect-[4/3] font-bold text-muted"
-        >
-          + Nueva materia
-        </button>
+        {!adding && (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 p-4 min-h-[88px] font-bold text-muted hover:border-white/30 hover:text-foreground transition"
+          >
+            <span className="grid size-8 place-items-center rounded-full bg-white/10 text-lg">+</span>
+            Nueva materia
+          </button>
+        )}
       </div>
 
       {adding && (
-        <form onSubmit={addSubject} className="mt-4 bg-card rounded-2xl p-4 space-y-3 animate-pop">
+        <form onSubmit={addSubject} className="mt-3 bg-card rounded-2xl p-4 space-y-3 ring-1 ring-white/10 animate-pop">
           <input autoFocus className={inputClass} placeholder="Ej: Matemáticas" value={name} onChange={(e) => setName(e.target.value)} />
           <div className="flex flex-wrap gap-2">
             {EMOJIS.map((em) => (
@@ -97,7 +100,7 @@ export default function Home() {
           <div className="flex gap-2">
             {COLORS.map((c) => (
               <button type="button" key={c} onClick={() => setColor(c)} aria-label={c}
-                className={`size-8 rounded-full ${color === c ? "ring-4 ring-offset-2 ring-black/30" : ""}`}
+                className={`size-8 rounded-full ${color === c ? "ring-2 ring-offset-2 ring-offset-[#262629] ring-white" : ""}`}
                 style={{ background: c }} />
             ))}
           </div>
