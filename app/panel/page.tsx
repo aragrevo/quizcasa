@@ -23,8 +23,8 @@ function dayKey(d: Date) {
   return d.toLocaleDateString("en-CA");
 }
 
-function computeStreak(days: Set<string>) {
-  const d = new Date();
+function computeStreak(days: Set<string>, now: number) {
+  const d = new Date(now);
   // Si hoy aún no estudió, la racha sigue viva desde ayer.
   if (!days.has(dayKey(d))) d.setDate(d.getDate() - 1);
   let streak = 0;
@@ -45,6 +45,8 @@ function addTo(map: Map<string, Bucket>, key: string, label: string, correct: bo
 export default function PanelPage() {
   const supabase = createClient();
   const [rows, setRows] = useState<AttemptRow[] | null>(null);
+  // Momento de la carga: las cuentas de "últimos 7 días" y la racha se calculan respecto a él.
+  const [loadedAt, setLoadedAt] = useState(0);
 
   useEffect(() => {
     const since = new Date();
@@ -54,17 +56,20 @@ export default function PanelPage() {
       .select("correct, time_ms, created_at, questions(id, prompt, options, correct_index, topics(id, title, subjects(name, emoji, color)))")
       .gte("created_at", since.toISOString())
       .order("created_at", { ascending: false })
-      .then(({ data }) => setRows((data as unknown as AttemptRow[]) ?? []));
+      .then(({ data }) => {
+        setLoadedAt(Date.now());
+        setRows((data as unknown as AttemptRow[]) ?? []);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!rows) return <Page>Cargando…</Page>;
 
   const valid = rows.filter((r) => r.questions);
-  const weekAgo = Date.now() - 7 * 86400000;
+  const weekAgo = loadedAt - 7 * 86400000;
   const thisWeek = valid.filter((r) => new Date(r.created_at).getTime() >= weekAgo);
   const minutesWeek = Math.round(thisWeek.reduce((s, r) => s + r.time_ms, 0) / 60000);
-  const streak = computeStreak(new Set(valid.map((r) => dayKey(new Date(r.created_at)))));
+  const streak = computeStreak(new Set(valid.map((r) => dayKey(new Date(r.created_at)))), loadedAt);
   const accuracy = valid.length ? Math.round((valid.filter((r) => r.correct).length / valid.length) * 100) : 0;
 
   const bySubject = new Map<string, Bucket>();

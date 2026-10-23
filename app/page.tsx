@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Subject } from "@/lib/types";
@@ -15,6 +16,7 @@ const EMOJIS = ["📐", "🧪", "🌍", "📜", "📖", "🧬", "🗣️", "🎨
 
 export default function Home() {
   const supabase = createClient();
+  const router = useRouter();
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [dueCount, setDueCount] = useState(0);
   const [adding, setAdding] = useState(false);
@@ -50,7 +52,8 @@ export default function Home() {
 
   async function logout() {
     await supabase.auth.signOut();
-    location.href = "/login";
+    router.replace("/login");
+    router.refresh();
   }
 
   return (
