@@ -181,7 +181,7 @@ export default function TopicPage() {
         <h2 className="font-black text-lg mb-3">1. Fotos de los apuntes</h2>
         <div className="grid grid-cols-3 gap-2 mb-3">
           {photos.map((p) => (
-            <div key={p.id} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-black/5">
+            <div key={p.id} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-white/5">
               {p.url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.url} alt="" className="size-full object-cover" />

@@ -1,7 +1,13 @@
 import Link from "next/link";
+import { Background } from "@/components/art";
 
 export function Page({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-2xl px-4 pb-16 pt-6">{children}</main>;
+  return (
+    <>
+      <Background />
+      <main className="mx-auto max-w-2xl px-4 pb-16 pt-6">{children}</main>
+    </>
+  );
 }
 
 export function BackLink({ href, label }: { href: string; label: string }) {
@@ -17,7 +23,7 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
 }
 
 export const inputClass =
-  "w-full rounded-xl border-2 border-black/10 dark:border-white/15 bg-transparent px-3 py-2 outline-none focus:border-k-purple";
+  "w-full rounded-xl border-2 border-white/15 bg-transparent px-3 py-2 outline-none focus:border-k-purple";
 
 export const buttonClass =
   "rounded-xl bg-k-purple text-white font-extrabold px-4 py-2 disabled:opacity-50 active:scale-95 transition";

@@ -155,7 +155,7 @@ function Bars({ buckets }: { buckets: Bucket[] }) {
               <span>{b.label}</span>
               <span>{pct}% · {b.total} resp.</span>
             </div>
-            <div className="h-3 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div className="h-3 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.color ?? "#46178f" }} />
             </div>
           </div>

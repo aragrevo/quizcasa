@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f3ff;
-  --foreground: #1e1b4b;
-  --card: #ffffff;
-  --muted: #6b7280;
+  /* Tema oscuro fijo, al estilo de digit.asu.edu */
+  --background: #1b1b1d;
+  --foreground: #f4f4f5;
+  --card: #262629;
+  --muted: #a1a1aa;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -18,15 +20,6 @@
   --color-k-green: #26890c;
   --color-k-purple: #46178f;
   --font-sans: "Nunito Variable", system-ui, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #120c24;
-    --foreground: #ede9fe;
-    --card: #1f1838;
-    --muted: #a1a1aa;
-  }
 }
 
 body {
