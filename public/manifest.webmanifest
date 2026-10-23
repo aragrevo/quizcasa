@@ -1,0 +1,11 @@
+{
+  "name": "QuizCasa",
+  "short_name": "QuizCasa",
+  "description": "Quizzes para estudiar a partir de fotos del cuaderno",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#46178f",
+  "theme_color": "#46178f",
+  "lang": "es",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
