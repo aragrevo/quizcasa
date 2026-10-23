@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Subject, Topic } from "@/lib/types";
-import { BackLink, Card, Page, buttonClass, inputClass } from "@/components/ui";
+import { BackLink, Page, buttonClass, inputClass } from "@/components/ui";
 
 type TopicRow = Topic & { questions: { count: number }[] };
 
@@ -69,24 +69,44 @@ export default function SubjectPage() {
         {topics.map((t) => {
           const count = t.questions[0]?.count ?? 0;
           return (
-            <Card key={t.id} className="flex items-center gap-3">
+            <div key={t.id} className="flex items-center gap-3 rounded-2xl bg-card p-5 ring-1 ring-white/10 shadow-sm">
               <Link href={`/tema/${t.id}`} className="flex-1 min-w-0 active:opacity-70">
-                <p className="font-extrabold">{t.title}</p>
-                <p className="text-sm text-muted">
-                  {count} preguntas
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted mb-1">Tema</p>
+                <p className="text-lg font-extrabold leading-snug">{t.title}</p>
+                <p className="text-sm text-muted mt-1">
+                  {count} pregunta{count === 1 ? "" : "s"}
                   {t.exam_date && ` · Examen ${new Date(t.exam_date + "T00:00").toLocaleDateString("es")}`}
                 </p>
               </Link>
-              {count > 0 && (
+              <Link
+                href={`/tema/${t.id}`}
+                aria-label="Ver preguntas"
+                title="Ver preguntas"
+                className="grid size-11 shrink-0 place-items-center rounded-full ring-1 ring-white/25 text-[#3b9cff] active:scale-95 transition"
+              >
+                <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 6.5l1.5 1.5L8 5.5M4 12.5l1.5 1.5L8 11.5M4 18.5l1.5 1.5L8 17.5M11 7h9M11 13h9M11 19h9" />
+                </svg>
+              </Link>
+              {count > 0 ? (
                 <Link
                   href={`/jugar?tema=${t.id}`}
-                  className="rounded-xl bg-k-purple text-white font-black px-4 py-3 active:scale-95 transition shrink-0"
+                  aria-label="Jugar"
+                  title="Jugar"
+                  className="grid size-14 shrink-0 place-items-center rounded-full bg-[#1a7fe0] text-white shadow-lg active:scale-95 transition"
                 >
-                  ▶ Jugar
+                  <PlayIcon />
                 </Link>
+              ) : (
+                <span
+                  aria-label="Sin preguntas todavía"
+                  title="Sin preguntas todavía"
+                  className="grid size-14 shrink-0 place-items-center rounded-full bg-white/10 text-white/40"
+                >
+                  <PlayIcon />
+                </span>
               )}
-              <Link href={`/tema/${t.id}`} className="text-2xl text-muted" aria-label="Abrir tema">›</Link>
-            </Card>
+            </div>
           );
         })}
         {!topics.length && <p className="text-muted text-center py-8">Aún no hay temas. Crea uno y sube fotos de tus apuntes.</p>}
@@ -94,5 +114,13 @@ export default function SubjectPage() {
 
       <button onClick={deleteSubject} className="mt-10 text-sm text-k-red font-bold">Borrar materia</button>
     </Page>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-6 translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+      <path d="M7 4.5v15l12-7.5z" />
+    </svg>
   );
 }
