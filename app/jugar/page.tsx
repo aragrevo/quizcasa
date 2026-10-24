@@ -8,7 +8,7 @@ import { nextReviewState } from "@/lib/leitner";
 import type { Question } from "@/lib/types";
 
 const SECONDS = 20;
-const MAX_QUESTIONS = 20;
+const MAX_QUESTIONS = 15;
 const ANSWER_STYLES = [
   { bg: "bg-k-red", shape: "▲" },
   { bg: "bg-k-blue", shape: "◆" },

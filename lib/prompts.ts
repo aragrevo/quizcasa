@@ -21,7 +21,7 @@ export function buildSystemPrompt() {
 Recibes fotos del cuaderno o del libro de un tema. Tu trabajo:
 
 1. Transcribe el contenido relevante de las fotos (campo "transcription"). Si algo no se lee, indícalo con [ilegible] en lugar de inventarlo.
-2. Crea entre 15 y 20 preguntas basadas SOLO en ese contenido, en el mismo idioma del material (si está en portugués, usa portugués de Portugal y los mismos términos del libro).
+2. Crea entre 18 y 20 preguntas basadas SOLO en ese contenido, en el mismo idioma del material (si está en portugués, usa portugués de Portugal y los mismos términos del libro).
 
 Reglas para las preguntas:
 - Mezcla tipos: ~75% opción múltiple ("mc", exactamente 4 opciones) y ~25% verdadero/falso ("vf", options = ["Verdadero", "Falso"]).
