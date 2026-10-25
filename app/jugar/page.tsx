@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nextReviewState } from "@/lib/leitner";
+import { mostMissed, type QuestionWithAttempts } from "@/lib/missed";
 import type { Question } from "@/lib/types";
 
 const SECONDS = 20;
@@ -61,6 +62,8 @@ export default function PlayPage() {
 function Game() {
   const params = useSearchParams();
   const topicId = params.get("tema");
+  // Modo "falladas": solo las preguntas del tema que más se han fallado.
+  const missedMode = topicId !== null && params.get("modo") === "falladas";
   const supabase = createClient();
 
   const [questions, setQuestions] = useState<Question[] | null>(null);
@@ -73,6 +76,12 @@ function Game() {
   const startedAt = useRef(0);
 
   const loadQuestions = useCallback(async () => {
+    if (missedMode) {
+      const { data } = await supabase.from("questions").select("*, attempts(correct)").eq("topic_id", topicId);
+      const missed = mostMissed((data ?? []) as QuestionWithAttempts[]);
+      setQuestions(shuffle(missed));
+      return;
+    }
     let query = supabase.from("questions").select("*");
     query = topicId ? query.eq("topic_id", topicId) : query.lte("next_review", new Date().toISOString());
     const { data } = await query;
@@ -81,7 +90,7 @@ function Game() {
     const sample = shuffle(data ?? []).slice(0, MAX_QUESTIONS);
     setQuestions(topicId ? orderByDifficulty(sample) : sample);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicId]);
+  }, [topicId, missedMode]);
 
   useEffect(() => {
     loadQuestions();
@@ -162,7 +171,7 @@ function Game() {
     return (
       <Screen>
         <p className="text-5xl mb-4">🎉</p>
-        <p className="text-2xl font-black mb-6">No hay preguntas pendientes</p>
+        <p className="text-2xl font-black mb-6">{missedMode ? "Aún no has fallado ninguna pregunta" : "No hay preguntas pendientes"}</p>
         <Link href={backHref} className="rounded-xl bg-white text-k-purple font-black px-6 py-3">Volver</Link>
       </Screen>
     );
@@ -171,7 +180,7 @@ function Game() {
   if (phase === "countdown") {
     return (
       <Screen>
-        <p className="text-xl font-bold opacity-80 mb-4">{topicId ? "¿Listo?" : "Repaso de hoy"}</p>
+        <p className="text-xl font-bold opacity-80 mb-4">{missedMode ? "Las que más fallas" : topicId ? "¿Listo?" : "Repaso de hoy"}</p>
         <p key={countdown} className="text-9xl font-black animate-pop">{countdown || "¡Ya!"}</p>
       </Screen>
     );
@@ -208,7 +217,7 @@ function Game() {
                 🔁 Repetir las {missed.length} falladas
               </button>
             )}
-            <button onClick={() => restart(orderByDifficulty(questions))} className="rounded-xl bg-white/20 font-black py-3">
+            <button onClick={() => restart(missedMode ? shuffle(questions) : orderByDifficulty(questions))} className="rounded-xl bg-white/20 font-black py-3">
               Jugar otra vez
             </button>
             <Link href={backHref} className="text-center font-bold opacity-80 py-2">Salir</Link>

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage } from "@/lib/image";
+import { MAX_MISSED, missCount, type QuestionWithAttempts } from "@/lib/missed";
 import { buildManualPrompt, parsePastedQuiz, toQuestionRows } from "@/lib/prompts";
 import type { Photo, Question, Topic } from "@/lib/types";
 import { BackLink, Card, Page, buttonClass, inputClass } from "@/components/ui";
@@ -21,6 +22,7 @@ export default function TopicPage() {
   const [topic, setTopic] = useState<TopicWithSubject | null>(null);
   const [photos, setPhotos] = useState<PhotoWithUrl[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [misses, setMisses] = useState<Record<string, number>>({});
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState("");
@@ -33,18 +35,20 @@ export default function TopicPage() {
     const [{ data: t }, { data: p }, { data: q }] = await Promise.all([
       supabase.from("topics").select("*, subjects(name)").eq("id", id).single(),
       supabase.from("photos").select("*").eq("topic_id", id).order("created_at"),
-      supabase.from("questions").select("*").eq("topic_id", id).order("created_at"),
+      supabase.from("questions").select("*, attempts(correct)").eq("topic_id", id).order("created_at"),
     ]);
     setTopic(t);
-    setQuestions(q ?? []);
-    const rows: PhotoWithUrl[] = p ?? [];
-    if (rows.length) {
+    const rows = (q ?? []) as QuestionWithAttempts[];
+    setQuestions(rows);
+    setMisses(Object.fromEntries(rows.map((question) => [question.id, missCount(question)])));
+    const photoRows: PhotoWithUrl[] = p ?? [];
+    if (photoRows.length) {
       const { data: signed } = await supabase.storage
         .from("photos")
-        .createSignedUrls(rows.map((r) => r.storage_path), 3600);
-      rows.forEach((r, i) => (r.url = signed?.[i]?.signedUrl ?? undefined));
+        .createSignedUrls(photoRows.map((r) => r.storage_path), 3600);
+      photoRows.forEach((r, i) => (r.url = signed?.[i]?.signedUrl ?? undefined));
     }
-    setPhotos(rows);
+    setPhotos(photoRows);
   }
 
   useEffect(() => {
@@ -148,6 +152,7 @@ export default function TopicPage() {
 
   if (!topic) return <Page>Cargando…</Page>;
   const pending = photos.filter((p) => !p.extracted_text).length;
+  const missedCount = questions.filter((q) => misses[q.id] > 0).length;
 
   return (
     <Page>
@@ -174,6 +179,14 @@ export default function TopicPage() {
           className="block text-center rounded-2xl bg-k-purple text-white text-2xl font-black py-5 my-4 shadow-lg active:scale-95 transition"
         >
           ▶ ¡Jugar! ({questions.length})
+        </Link>
+      )}
+      {missedCount > 0 && (
+        <Link
+          href={`/jugar?tema=${id}&modo=falladas`}
+          className="block text-center rounded-2xl bg-k-yellow text-gray-900 text-lg font-black py-3 -mt-2 mb-4 shadow active:scale-95 transition"
+        >
+          🔁 Repasar las que más fallas ({Math.min(missedCount, MAX_MISSED)})
         </Link>
       )}
 
@@ -241,7 +254,12 @@ export default function TopicPage() {
                 <QuestionEditor key={q.id} question={q} onSave={saveQuestion} onCancel={() => setEditing(null)} />
               ) : (
                 <Card key={q.id}>
-                  <p className="font-bold mb-2">{i + 1}. {q.prompt}</p>
+                  <p className="font-bold mb-2">
+                    {i + 1}. {q.prompt}
+                    {misses[q.id] > 0 && (
+                      <span className="ml-2 text-xs font-bold text-k-red whitespace-nowrap">✕ {misses[q.id]} {misses[q.id] === 1 ? "fallo" : "fallos"}</span>
+                    )}
+                  </p>
                   <ul className="text-sm space-y-1 mb-2">
                     {q.options.map((o, j) => (
                       <li key={j} className={j === q.correct_index ? "font-bold text-k-green" : "text-muted"}>
