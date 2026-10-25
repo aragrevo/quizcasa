@@ -62,6 +62,7 @@ export default function Home() {
         <h1 className="text-3xl font-black">QuizCasa</h1>
         <div className="flex gap-3 text-sm font-bold">
           <Link href="/panel" className="text-violet-300">📊 Progreso</Link>
+          <Link href="/cuenta" className="text-muted">⚙️ Cuenta</Link>
           <button onClick={logout} className="text-muted">Salir</button>
         </div>
       </header>
