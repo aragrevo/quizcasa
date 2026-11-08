@@ -28,6 +28,13 @@ function shuffle<T>(items: T[]) {
   return a;
 }
 
+// Baraja las opciones (también Verdadero/Falso) en la copia que usa el juego, para que
+// el alumno no memorice la posición o el color de la respuesta. La BD no cambia.
+function shuffleOptions(q: Question): Question {
+  const order = shuffle(q.options.map((_, i) => i));
+  return { ...q, options: order.map((i) => q.options[i]), correct_index: order.indexOf(q.correct_index) };
+}
+
 // Empieza por lo fácil y sube de dificultad, mezclando dentro de cada nivel.
 function orderByDifficulty(qs: Question[]) {
   return [1, 2, 3].flatMap((d) => shuffle(qs.filter((q) => q.difficulty === d)));
@@ -79,7 +86,7 @@ function Game() {
     if (missedMode) {
       const { data } = await supabase.from("questions").select("*, attempts(correct)").eq("topic_id", topicId);
       const missed = mostMissed((data ?? []) as QuestionWithAttempts[]);
-      setQuestions(shuffle(missed));
+      setQuestions(shuffle(missed).map(shuffleOptions));
       return;
     }
     let query = supabase.from("questions").select("*");
@@ -87,7 +94,7 @@ function Game() {
     const { data } = await query;
     // Primero se elige una muestra al azar y luego se ordena: si se ordenara antes,
     // recortar a MAX_QUESTIONS dejaría siempre fuera las difíciles.
-    const sample = shuffle(data ?? []).slice(0, MAX_QUESTIONS);
+    const sample = shuffle(data ?? []).slice(0, MAX_QUESTIONS).map(shuffleOptions);
     setQuestions(topicId ? orderByDifficulty(sample) : sample);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId, missedMode]);
@@ -97,7 +104,7 @@ function Game() {
   }, [loadQuestions]);
 
   function restart(qs: Question[]) {
-    setQuestions(qs);
+    setQuestions(qs.map(shuffleOptions));
     setIndex(0);
     setResults([]);
     setStreak(0);
