@@ -6,7 +6,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nextReviewState } from "@/lib/leitner";
 import { mostMissed, type QuestionWithAttempts } from "@/lib/missed";
+import { buildSocraticPrompt } from "@/lib/prompts";
 import type { Question } from "@/lib/types";
+import { SocraticButton } from "@/components/SocraticButton";
 
 const SECONDS = 20;
 const MAX_QUESTIONS = 15;
@@ -17,7 +19,13 @@ const ANSWER_STYLES = [
   { bg: "bg-k-green", shape: "■" },
 ];
 
-type Result = { question: Question; chosen: number | null; correct: boolean; points: number };
+// La materia y el tema van en cada pregunta porque el repaso mezcla temas.
+type PlayQuestion = Question & { topics: { title: string; subjects: { name: string } | null } | null };
+// `chosenText` guarda el texto elegido: el índice no sirve fuera de esta partida
+// porque las opciones se barajan en cada una.
+type Result = { question: PlayQuestion; chosen: number | null; chosenText: string | null; correct: boolean; points: number };
+
+const QUESTION_FIELDS = "*, topics(title, subjects(name))";
 
 function shuffle<T>(items: T[]) {
   const a = [...items];
@@ -30,13 +38,13 @@ function shuffle<T>(items: T[]) {
 
 // Baraja las opciones (también Verdadero/Falso) en la copia que usa el juego, para que
 // el alumno no memorice la posición o el color de la respuesta. La BD no cambia.
-function shuffleOptions(q: Question): Question {
+function shuffleOptions<Q extends Question>(q: Q): Q {
   const order = shuffle(q.options.map((_, i) => i));
   return { ...q, options: order.map((i) => q.options[i]), correct_index: order.indexOf(q.correct_index) };
 }
 
 // Empieza por lo fácil y sube de dificultad, mezclando dentro de cada nivel.
-function orderByDifficulty(qs: Question[]) {
+function orderByDifficulty<Q extends Question>(qs: Q[]) {
   return [1, 2, 3].flatMap((d) => shuffle(qs.filter((q) => q.difficulty === d)));
 }
 
@@ -73,7 +81,9 @@ function Game() {
   const missedMode = topicId !== null && params.get("modo") === "falladas";
   const supabase = createClient();
 
-  const [questions, setQuestions] = useState<Question[] | null>(null);
+  const [questions, setQuestions] = useState<PlayQuestion[] | null>(null);
+  // Transcripciones de los apuntes por tema, para el tutor socrático.
+  const [notes, setNotes] = useState<Record<string, string[]>>({});
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<"countdown" | "question" | "feedback" | "end">("countdown");
   const [countdown, setCountdown] = useState(3);
@@ -83,27 +93,49 @@ function Game() {
   const startedAt = useRef(0);
 
   const loadQuestions = useCallback(async () => {
+    let qs: PlayQuestion[];
     if (missedMode) {
-      const { data } = await supabase.from("questions").select("*, attempts(correct)").eq("topic_id", topicId);
-      const missed = mostMissed((data ?? []) as QuestionWithAttempts[]);
-      setQuestions(shuffle(missed).map(shuffleOptions));
-      return;
+      const { data } = await supabase.from("questions").select(`${QUESTION_FIELDS}, attempts(correct)`).eq("topic_id", topicId);
+      qs = shuffle(mostMissed((data ?? []) as (PlayQuestion & QuestionWithAttempts)[])).map(shuffleOptions);
+    } else {
+      let query = supabase.from("questions").select(QUESTION_FIELDS);
+      query = topicId ? query.eq("topic_id", topicId) : query.lte("next_review", new Date().toISOString());
+      const { data } = await query;
+      // Primero se elige una muestra al azar y luego se ordena: si se ordenara antes,
+      // recortar a MAX_QUESTIONS dejaría siempre fuera las difíciles.
+      const sample = shuffle((data ?? []) as PlayQuestion[]).slice(0, MAX_QUESTIONS).map(shuffleOptions);
+      qs = topicId ? orderByDifficulty(sample) : sample;
     }
-    let query = supabase.from("questions").select("*");
-    query = topicId ? query.eq("topic_id", topicId) : query.lte("next_review", new Date().toISOString());
-    const { data } = await query;
-    // Primero se elige una muestra al azar y luego se ordena: si se ordenara antes,
-    // recortar a MAX_QUESTIONS dejaría siempre fuera las difíciles.
-    const sample = shuffle(data ?? []).slice(0, MAX_QUESTIONS).map(shuffleOptions);
-    setQuestions(topicId ? orderByDifficulty(sample) : sample);
+    setQuestions(qs);
+    // Se cargan ya para que el botón del tutor copie sin esperar a la red (iOS).
+    const topicIds = [...new Set(qs.map((q) => q.topic_id))];
+    if (!topicIds.length) return;
+    const { data: photos } = await supabase
+      .from("photos")
+      .select("topic_id, extracted_text")
+      .in("topic_id", topicIds)
+      .not("extracted_text", "is", null);
+    const byTopic: Record<string, string[]> = {};
+    for (const p of photos ?? []) (byTopic[p.topic_id] ??= []).push(p.extracted_text);
+    setNotes(byTopic);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId, missedMode]);
+
+  function socraticPrompt(r: Result) {
+    return buildSocraticPrompt({
+      subject: r.question.topics?.subjects?.name ?? "",
+      topic: r.question.topics?.title ?? "",
+      question: r.question,
+      chosen: r.chosenText,
+      notes: notes[r.question.topic_id] ?? [],
+    });
+  }
 
   useEffect(() => {
     loadQuestions();
   }, [loadQuestions]);
 
-  function restart(qs: Question[]) {
+  function restart(qs: PlayQuestion[]) {
     setQuestions(qs.map(shuffleOptions));
     setIndex(0);
     setResults([]);
@@ -137,7 +169,7 @@ function Game() {
         : 0;
       beep(correct);
       setStreak(newStreak);
-      setResults((r) => [...r, { question: q, chosen, correct, points }]);
+      setResults((r) => [...r, { question: q, chosen, chosenText: chosen === null ? null : q.options[chosen], correct, points }]);
       setPhase("feedback");
 
       supabase.from("attempts").insert({ question_id: q.id, correct, time_ms: Math.min(elapsed, SECONDS * 1000) }).then();
@@ -214,6 +246,7 @@ function Game() {
                   <p className="font-bold">{r.question.prompt}</p>
                   <p className="text-green-300">✓ {r.question.options[r.question.correct_index]}</p>
                   <p className="opacity-80 italic">{r.question.explanation}</p>
+                  <SocraticButton getPrompt={() => socraticPrompt(r)} className="mt-1 rounded-lg bg-white/20 font-bold px-3 py-1" />
                 </div>
               ))}
             </div>
@@ -264,6 +297,9 @@ function Game() {
           </p>
           {!last.correct && <p className="font-bold">Respuesta: {q.options[q.correct_index]}</p>}
           <p className="text-sm mt-1 opacity-95">{q.explanation}</p>
+          {!last.correct && (
+            <SocraticButton getPrompt={() => socraticPrompt(last)} className="mt-3 rounded-xl bg-white/25 font-black px-4 py-2" />
+          )}
         </div>
       )}
 

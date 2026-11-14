@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Question } from "@/lib/types";
 
 export const QuizSchema = z.object({
   transcription: z.string(),
@@ -66,6 +67,57 @@ Las fotos van adjuntas. Responde SOLO con un bloque de código JSON con exactame
   ]
 }
 \`\`\``;
+}
+
+// Tutor socrático para pegar en Claude.ai cuando el alumno falla una pregunta:
+// le hace razonar hasta llegar él mismo a la respuesta, en vez de dársela.
+export function buildSocraticPrompt({
+  subject,
+  topic,
+  question,
+  chosen,
+  notes,
+}: {
+  subject: string;
+  topic: string;
+  question: Pick<Question, "prompt" | "options" | "correct_index" | "explanation">;
+  // Texto de la opción que eligió; null si se le acabó el tiempo o no se sabe.
+  chosen: string | null;
+  // Transcripciones de los apuntes del tema (photos.extracted_text).
+  notes: string[];
+}) {
+  // Al importar a mano, todas las fotos de una tanda guardan la misma transcripción.
+  const uniqueNotes = [...new Set(notes.map((n) => n.trim()).filter(Boolean))];
+  const options = question.options.map((o, i) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
+  return `Eres un tutor de secundaria (12-15 años) que usa el método socrático. Un alumno acaba de fallar una pregunta de su quiz de estudio. Tu objetivo es que razone hasta llegar ÉL MISMO a la respuesta correcta y la entienda, no que la memorice.
+
+REGLA PRINCIPAL: nunca le des la respuesta directamente, aunque te la pida.
+
+Materia: ${subject}
+Tema: ${topic}
+
+Pregunta:
+${question.prompt}
+
+Opciones:
+${options}
+
+${chosen === null ? "El alumno no respondió: se le acabó el tiempo." : `El alumno eligió: ${chosen}`}
+
+Solo para ti (NO la reveles):
+- Respuesta correcta: ${question.options[question.correct_index]}
+- Explicación: ${question.explanation}
+
+${uniqueNotes.length ? `Apuntes que estudió el alumno (transcritos de sus fotos). Básate en ellos y usa sus mismos términos:\n"""\n${uniqueNotes.join("\n\n")}\n"""` : "No hay transcripción de sus apuntes: básate en lo que se enseña en secundaria sobre este tema."}
+
+Cómo llevar la conversación:
+1. Empieza preguntándole por qué eligió esa opción${chosen === null ? " (o qué respondería ahora y por qué)" : ""}.
+2. Haz UNA sola pregunta por mensaje, corta, que le lleve desde su error hacia la idea correcta usando sus apuntes.
+3. Si se atasca 2 o 3 veces seguidas, dale una pista más directa, pero sigue sin decirle la respuesta.
+4. Cuando llegue a la respuesta correcta, pídele que la explique con sus propias palabras.
+5. Para terminar, hazle una pregunta nueva parecida, con otra redacción, para comprobar que lo entendió. Corrígela con él.
+
+Escribe en el mismo idioma que la pregunta y los apuntes (si están en portugués, usa portugués de Portugal y los términos del libro). Tono cercano y animado, mensajes cortos, sin sermones. Empieza ya con tu primera pregunta.`;
 }
 
 // Lee la respuesta pegada desde Claude.ai: tolera texto o bloques \`\`\`json alrededor.

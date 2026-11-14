@@ -11,7 +11,7 @@ export function missCount(q: QuestionWithAttempts) {
 
 // Las preguntas falladas alguna vez, de más a menos fallos; a igual número de
 // fallos va primero la que tiene peor porcentaje de acierto.
-export function mostMissed(qs: QuestionWithAttempts[], limit = MAX_MISSED) {
+export function mostMissed<Q extends QuestionWithAttempts>(qs: Q[], limit = MAX_MISSED) {
   const missRate = (q: QuestionWithAttempts) => missCount(q) / q.attempts.length;
   return qs
     .filter((q) => missCount(q) > 0)

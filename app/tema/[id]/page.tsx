@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage } from "@/lib/image";
 import { MAX_MISSED, missCount, type QuestionWithAttempts } from "@/lib/missed";
-import { buildManualPrompt, parsePastedQuiz, toQuestionRows } from "@/lib/prompts";
+import { buildManualPrompt, buildSocraticPrompt, parsePastedQuiz, toQuestionRows } from "@/lib/prompts";
 import type { Photo, Question, Topic } from "@/lib/types";
 import { BackLink, Card, Page, buttonClass, inputClass } from "@/components/ui";
+import { SocraticButton } from "@/components/SocraticButton";
 
 type PhotoWithUrl = Photo & { url?: string };
 type TopicWithSubject = Topic & { subjects: { name: string } | null };
@@ -101,6 +102,17 @@ export default function TopicPage() {
     await navigator.clipboard.writeText(buildManualPrompt(topic?.subjects?.name ?? "", topic!.title));
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  }
+
+  // Fuera del juego no se sabe qué opción eligió: el tutor le pregunta qué respondería.
+  function socraticPrompt(q: Question) {
+    return buildSocraticPrompt({
+      subject: topic?.subjects?.name ?? "",
+      topic: topic!.title,
+      question: q,
+      chosen: null,
+      notes: photos.flatMap((p) => (p.extracted_text ? [p.extracted_text] : [])),
+    });
   }
 
   async function importPasted() {
@@ -271,6 +283,7 @@ export default function TopicPage() {
                   <div className="flex gap-4 text-sm font-bold">
                     <button onClick={() => setEditing(q.id)} className="text-k-blue">Editar</button>
                     <button onClick={() => deleteQuestion(q.id)} className="text-k-red">Borrar</button>
+                    {misses[q.id] > 0 && <SocraticButton getPrompt={() => socraticPrompt(q)} className="ml-auto text-k-yellow" />}
                   </div>
                 </Card>
               ),
