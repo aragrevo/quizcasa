@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -7,8 +7,9 @@ import type { Question } from "@/lib/types";
 
 export const maxDuration = 60;
 
-// Alias que Google mantiene apuntando al modelo Flash vigente.
-const MODEL = "gemini-flash-latest";
+// Modelo fijo: el SDK usa la API v1, donde el alias "gemini-flash-latest" no existe (404),
+// y gemini-3.8-flash daba 503 por saturación en noviembre de 2026.
+const MODEL = "gemini-3.5-flash";
 
 // Límites para que una conversación no dispare el consumo de la API.
 const BodySchema = z.object({
@@ -67,13 +68,17 @@ export async function POST(request: Request) {
     stream = await ai.models.generateContentStream({
       model: MODEL,
       contents: messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
-      config: { systemInstruction, maxOutputTokens: 1024 },
+      // Poco razonamiento: el tutor hace preguntas cortas y así responde antes.
+      config: { systemInstruction, maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
     });
   } catch (error) {
     if (error instanceof ApiError) {
       console.error("Gemini API error", error.status, error.message);
       if (error.status === 429) {
         return NextResponse.json({ error: "Demasiadas solicitudes, espera un minuto" }, { status: 429 });
+      }
+      if (error.status === 503) {
+        return NextResponse.json({ error: "El tutor está muy ocupado, inténtalo en un momento" }, { status: 503 });
       }
       if (error.status === 400 || error.status === 401 || error.status === 403) {
         return NextResponse.json({ error: "API key de Gemini inválida o sin permisos" }, { status: 500 });
