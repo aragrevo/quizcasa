@@ -60,7 +60,9 @@ export async function POST(request: Request) {
     // Solo se acepta una opción real de la pregunta.
     chosen: chosen !== null && question.options.includes(chosen) ? chosen : null,
     notes: (photos ?? []).map((p) => p.extracted_text as string),
-  });
+  }) +
+    // El chat de la app muestra texto plano (Claude.ai sí renderiza Markdown y LaTeX).
+    `\n\nFormato: el chat solo muestra texto plano. No uses LaTeX ni Markdown (nada de $, \\text, **, # ni listas con -). Escribe las fórmulas con símbolos normales: ×, ÷, ², ³, √, π, ≤, ≥, y las fracciones como 3/4. Ejemplo: Soma = −5 + (−2,5) + 1 + 4,5`;
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   let stream: AsyncGenerator<{ text?: string }>;

@@ -125,7 +125,7 @@ function TutorChat({
         {visible.map((m, i) => (
           <div
             key={i}
-            className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2 ${
+            className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2 ${
               m.role === "user" ? "ml-auto bg-k-purple text-white" : "bg-card"
             }`}
           >
