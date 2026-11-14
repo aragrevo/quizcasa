@@ -246,7 +246,7 @@ function Game() {
                   <p className="font-bold">{r.question.prompt}</p>
                   <p className="text-green-300">✓ {r.question.options[r.question.correct_index]}</p>
                   <p className="opacity-80 italic">{r.question.explanation}</p>
-                  <SocraticButton getPrompt={() => socraticPrompt(r)} className="mt-1 rounded-lg bg-white/20 font-bold px-3 py-1" />
+                  <SocraticButton questionId={r.question.id} chosen={r.chosenText} getPrompt={() => socraticPrompt(r)} className="mt-1 rounded-lg bg-white/20 font-bold px-3 py-1" />
                 </div>
               ))}
             </div>
@@ -298,7 +298,7 @@ function Game() {
           {!last.correct && <p className="font-bold">Respuesta: {q.options[q.correct_index]}</p>}
           <p className="text-sm mt-1 opacity-95">{q.explanation}</p>
           {!last.correct && (
-            <SocraticButton getPrompt={() => socraticPrompt(last)} className="mt-3 rounded-xl bg-white/25 font-black px-4 py-2" />
+            <SocraticButton questionId={last.question.id} chosen={last.chosenText} getPrompt={() => socraticPrompt(last)} className="mt-3 rounded-xl bg-white/25 font-black px-4 py-2" />
           )}
         </div>
       )}

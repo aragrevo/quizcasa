@@ -283,7 +283,7 @@ export default function TopicPage() {
                   <div className="flex gap-4 text-sm font-bold">
                     <button onClick={() => setEditing(q.id)} className="text-k-blue">Editar</button>
                     <button onClick={() => deleteQuestion(q.id)} className="text-k-red">Borrar</button>
-                    {misses[q.id] > 0 && <SocraticButton getPrompt={() => socraticPrompt(q)} className="ml-auto text-k-yellow" />}
+                    {misses[q.id] > 0 && <SocraticButton questionId={q.id} chosen={null} getPrompt={() => socraticPrompt(q)} className="ml-auto text-k-yellow" />}
                   </div>
                 </Card>
               ),
