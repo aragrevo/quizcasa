@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Bucket, Summary } from "@/lib/stats";
 import type { Question } from "@/lib/types";
 
 export const QuestionSchema = z.object({
@@ -228,41 +227,4 @@ export function toQuestionRow(q: GeneratedQuestion, topicId: string) {
 
 export function toQuestionRows(quiz: Quiz, topicId: string) {
   return quiz.questions.map((q) => toQuestionRow(q, topicId)).filter((r) => r !== null);
-}
-
-// Resumen para el padre a partir de las estadísticas del panel (lib/stats.ts).
-export function buildReportPrompt({
-  summary,
-  days,
-  exams,
-}: {
-  summary: Summary;
-  days: number;
-  // Exámenes próximos: tema, materia y fecha (YYYY-MM-DD).
-  exams: { topic: string; subject: string; date: string }[];
-}) {
-  const pct = (b: Bucket) => `${Math.round((b.correct / b.total) * 100)}% de ${b.total} respuestas`;
-  return `Eres un tutor que informa a un padre sobre cómo estudia su hijo de secundaria (12-15 años) con una app de quizzes con repaso espaciado.
-
-Datos de los últimos ${days} días:
-- Respuestas: ${summary.valid.length}, aciertos ${summary.accuracy}%.
-- Racha actual: ${summary.streak} días seguidos estudiando. Minutos en los últimos 7 días: ${summary.minutesWeek}.
-
-Aciertos por materia:
-${summary.subjects.map((b) => `- ${b.label}: ${pct(b)}`).join("\n") || "- (sin datos)"}
-
-Temas más flojos:
-${summary.weakTopics.map((b) => `- ${b.label}: ${pct(b)}`).join("\n") || "- (sin datos)"}
-
-Preguntas que más falla (con la respuesta correcta):
-${summary.mostMissed.map((b) => `- ${b.label} → ${b.answer} (falló ${b.total - b.correct} de ${b.total})`).join("\n") || "- (ninguna)"}
-
-Próximos exámenes:
-${exams.map((e) => `- ${e.date}: ${e.subject} · ${e.topic}`).join("\n") || "- (ninguno registrado)"}
-
-Escribe un resumen de 4 a 6 frases en español, cercano y concreto, sin sermones:
-1. Qué domina y cómo va la constancia.
-2. Qué temas le cuestan y qué conceptos concretos falla (deduce la idea de fondo de las preguntas falladas, no las copies).
-3. Qué conviene repasar antes del próximo examen, si hay alguno.
-Usa solo estos datos; no inventes notas ni temas. Formato: texto plano, sin Markdown (nada de **, # ni listas).`;
 }

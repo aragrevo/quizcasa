@@ -1,4 +1,4 @@
-// Estadísticas de los intentos, compartidas por el panel (cliente) y el informe con IA (servidor).
+// Estadísticas de los intentos, usadas por el inicio y el panel.
 
 export const ATTEMPT_FIELDS =
   "correct, time_ms, created_at, questions(id, prompt, options, correct_index, topics(id, title, subjects(name, emoji, color)))";
@@ -72,5 +72,3 @@ export function summarize(rows: AttemptRow[], now: number) {
 
   return { valid, thisWeek, minutesWeek, streak, accuracy, subjects: [...bySubject.values()], weakTopics, mostMissed };
 }
-
-export type Summary = ReturnType<typeof summarize>;
