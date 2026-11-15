@@ -30,4 +30,10 @@ export type Question = {
   difficulty: number;
   box: number;
   next_review: string | null;
+  // Una frase por opción con el error que lleva a elegirla ("" en la correcta); vacío en preguntas viejas.
+  option_feedback: string[];
+  // Pregunta raíz de la que es variante; null si es original.
+  variant_of: string | null;
+  // Reemplazada por una variante: fuera del juego, del repaso y de los conteos.
+  retired: boolean;
 };

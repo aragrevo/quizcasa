@@ -40,7 +40,13 @@ function shuffle<T>(items: T[]) {
 // el alumno no memorice la posición o el color de la respuesta. La BD no cambia.
 function shuffleOptions<Q extends Question>(q: Q): Q {
   const order = shuffle(q.options.map((_, i) => i));
-  return { ...q, options: order.map((i) => q.options[i]), correct_index: order.indexOf(q.correct_index) };
+  return {
+    ...q,
+    options: order.map((i) => q.options[i]),
+    // Las preguntas viejas no tienen feedback por opción: se deja vacío.
+    option_feedback: q.option_feedback?.length === q.options.length ? order.map((i) => q.option_feedback[i]) : [],
+    correct_index: order.indexOf(q.correct_index),
+  };
 }
 
 // Empieza por lo fácil y sube de dificultad, mezclando dentro de cada nivel.
@@ -82,6 +88,12 @@ function Game() {
   const supabase = createClient();
 
   const [questions, setQuestions] = useState<PlayQuestion[] | null>(null);
+  const [loadingText, setLoadingText] = useState("Cargando…");
+  // Aviso si no se pudieron crear las variantes del modo falladas.
+  const [notice, setNotice] = useState<string | null>(null);
+  // En desarrollo, StrictMode ejecuta el efecto dos veces: sin esto se crearían
+  // las variantes dos veces.
+  const variantsRequested = useRef(false);
   // Transcripciones de los apuntes por tema, para el tutor socrático.
   const [notes, setNotes] = useState<Record<string, string[]>>({});
   const [index, setIndex] = useState(0);
@@ -92,13 +104,41 @@ function Game() {
   const [streak, setStreak] = useState(0);
   const startedAt = useRef(0);
 
+  // Cambia las preguntas por variantes nuevas (otra redacción del mismo concepto)
+  // para que no reconozca la respuesta de memoria. Si falla, juega las de siempre.
+  async function withVariants(missed: PlayQuestion[]): Promise<PlayQuestion[]> {
+    setLoadingText("Creando preguntas nuevas…");
+    try {
+      const res = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId, questionIds: missed.map((q) => q.id) }),
+      });
+      if (!res.ok) throw new Error();
+      const { questions: variants } = (await res.json()) as { questions: PlayQuestion[] };
+      // Las que no tuvieron variante se juegan como estaban.
+      const replaced = new Set(variants.map((v) => v.variant_of));
+      return [...variants, ...missed.filter((q) => !replaced.has(q.variant_of ?? q.id))];
+    } catch {
+      setNotice("No se pudieron crear preguntas nuevas: juegas las de siempre");
+      return missed;
+    }
+  }
+
   const loadQuestions = useCallback(async () => {
     let qs: PlayQuestion[];
     if (missedMode) {
-      const { data } = await supabase.from("questions").select(`${QUESTION_FIELDS}, attempts(correct)`).eq("topic_id", topicId);
-      qs = shuffle(mostMissed((data ?? []) as (PlayQuestion & QuestionWithAttempts)[])).map(shuffleOptions);
+      if (variantsRequested.current) return;
+      variantsRequested.current = true;
+      const { data } = await supabase
+        .from("questions")
+        .select(`${QUESTION_FIELDS}, attempts(correct)`)
+        .eq("topic_id", topicId)
+        .eq("retired", false);
+      const missed = mostMissed((data ?? []) as (PlayQuestion & QuestionWithAttempts)[]);
+      qs = shuffle(missed.length ? await withVariants(missed) : missed).map(shuffleOptions);
     } else {
-      let query = supabase.from("questions").select(QUESTION_FIELDS);
+      let query = supabase.from("questions").select(QUESTION_FIELDS).eq("retired", false);
       query = topicId ? query.eq("topic_id", topicId) : query.lte("next_review", new Date().toISOString());
       const { data } = await query;
       // Primero se elige una muestra al azar y luego se ordena: si se ordenara antes,
@@ -204,7 +244,7 @@ function Game() {
   const backHref = topicId ? `/tema/${topicId}` : "/";
   const score = results.reduce((s, r) => s + r.points, 0);
 
-  if (!questions) return <Screen>Cargando…</Screen>;
+  if (!questions) return <Screen>{loadingText}</Screen>;
 
   if (!questions.length) {
     return (
@@ -220,6 +260,7 @@ function Game() {
     return (
       <Screen>
         <p className="text-xl font-bold opacity-80 mb-4">{missedMode ? "Las que más fallas" : topicId ? "¿Listo?" : "Repaso de hoy"}</p>
+        {notice && <p className="text-sm opacity-80 mb-4">{notice}</p>}
         <p key={countdown} className="text-9xl font-black animate-pop">{countdown || "¡Ya!"}</p>
       </Screen>
     );
@@ -245,6 +286,9 @@ function Game() {
                 <div key={r.question.id} className="text-sm">
                   <p className="font-bold">{r.question.prompt}</p>
                   <p className="text-green-300">✓ {r.question.options[r.question.correct_index]}</p>
+                  {r.chosen !== null && r.question.option_feedback[r.chosen] && (
+                    <p className="text-red-300">✕ {r.chosenText}: {r.question.option_feedback[r.chosen]}</p>
+                  )}
                   <p className="opacity-80 italic">{r.question.explanation}</p>
                   <SocraticButton questionId={r.question.id} chosen={r.chosenText} getPrompt={() => socraticPrompt(r)} className="mt-1 rounded-lg bg-white/20 font-bold px-3 py-1" />
                 </div>
@@ -295,7 +339,10 @@ function Game() {
           <p className="text-2xl font-black">
             {last.correct ? `¡Correcto! +${last.points}` : last.chosen === null ? "⏰ Se acabó el tiempo" : "Incorrecto"}
           </p>
-          {!last.correct && <p className="font-bold">Respuesta: {q.options[q.correct_index]}</p>}
+          {!last.correct && last.chosen !== null && q.option_feedback[last.chosen] && (
+            <p className="text-sm mt-1">Elegiste «{last.chosenText}»: {q.option_feedback[last.chosen]}</p>
+          )}
+          {!last.correct && <p className="font-bold mt-1">Respuesta: {q.options[q.correct_index]}</p>}
           <p className="text-sm mt-1 opacity-95">{q.explanation}</p>
           {!last.correct && (
             <SocraticButton questionId={last.question.id} chosen={last.chosenText} getPrompt={() => socraticPrompt(last)} className="mt-3 rounded-xl bg-white/25 font-black px-4 py-2" />

@@ -26,10 +26,16 @@ export default function Home() {
 
   async function load() {
     const [{ data }, { count }] = await Promise.all([
-      supabase.from("subjects").select("*, topics(questions(count))").order("created_at"),
+      supabase
+        .from("subjects")
+        .select("*, topics(questions(count))")
+        // Las preguntas reemplazadas por una variante no cuentan.
+        .eq("topics.questions.retired", false)
+        .order("created_at"),
       supabase
         .from("questions")
         .select("id", { count: "exact", head: true })
+        .eq("retired", false)
         .lte("next_review", new Date().toISOString()),
     ]);
     setSubjects((data as SubjectRow[]) ?? []);

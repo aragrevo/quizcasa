@@ -36,7 +36,7 @@ export default function TopicPage() {
     const [{ data: t }, { data: p }, { data: q }] = await Promise.all([
       supabase.from("topics").select("*, subjects(name)").eq("id", id).single(),
       supabase.from("photos").select("*").eq("topic_id", id).order("created_at"),
-      supabase.from("questions").select("*, attempts(correct)").eq("topic_id", id).order("created_at"),
+      supabase.from("questions").select("*, attempts(correct)").eq("topic_id", id).eq("retired", false).order("created_at"),
     ]);
     setTopic(t);
     const rows = (q ?? []) as QuestionWithAttempts[];

@@ -21,7 +21,7 @@ export default function SubjectPage() {
   async function load() {
     const [{ data: s }, { data: t }] = await Promise.all([
       supabase.from("subjects").select("*").eq("id", id).single(),
-      supabase.from("topics").select("*, questions(count)").eq("subject_id", id).order("created_at", { ascending: false }),
+      supabase.from("topics").select("*, questions(count)").eq("subject_id", id).eq("questions.retired", false).order("created_at", { ascending: false }),
     ]);
     setSubject(s);
     setTopics((t as TopicRow[]) ?? []);
