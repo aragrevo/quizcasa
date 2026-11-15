@@ -8,6 +8,8 @@ import type { Subject } from "@/lib/types";
 import { Page, buttonClass, inputClass } from "@/components/ui";
 import { ReviewCard } from "@/components/ReviewCard";
 import { SubjectCard } from "@/components/SubjectCard";
+import { StatsRow } from "@/components/StatsRow";
+import { ATTEMPT_FIELDS, summarize, type AttemptRow } from "@/lib/stats";
 
 const COLORS = ["#e21b3c", "#1368ce", "#d89e00", "#26890c", "#46178f", "#0aa3a3", "#e0598b"];
 type SubjectRow = Subject & { topics: { questions: { count: number }[] }[] };
@@ -19,13 +21,16 @@ export default function Home() {
   const router = useRouter();
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [dueCount, setDueCount] = useState(0);
+  const [stats, setStats] = useState<ReturnType<typeof summarize> | null>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(EMOJIS[0]);
   const [color, setColor] = useState(COLORS[0]);
 
   async function load() {
-    const [{ data }, { count }] = await Promise.all([
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const [{ data }, { count }, { data: attempts }] = await Promise.all([
       supabase
         .from("subjects")
         .select("*, topics(questions(count))")
@@ -37,9 +42,11 @@ export default function Home() {
         .select("id", { count: "exact", head: true })
         .eq("retired", false)
         .lte("next_review", new Date().toISOString()),
+      supabase.from("attempts").select(ATTEMPT_FIELDS).gte("created_at", since.toISOString()),
     ]);
     setSubjects((data as SubjectRow[]) ?? []);
     setDueCount(count ?? 0);
+    setStats(summarize((attempts as unknown as AttemptRow[]) ?? [], Date.now()));
   }
 
   useEffect(() => {
@@ -74,6 +81,8 @@ export default function Home() {
       </header>
 
       <ReviewCard dueCount={dueCount} />
+
+      {stats && stats.valid.length > 0 && <StatsRow {...stats} />}
 
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted mb-3">Tus materias</p>
       <div className="grid gap-3 sm:grid-cols-2">
