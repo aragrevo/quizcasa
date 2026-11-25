@@ -6,9 +6,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { nextReviewState } from "@/lib/leitner";
 import { mostMissed, type QuestionWithAttempts } from "@/lib/missed";
-import { buildSocraticPrompt } from "@/lib/prompts";
+import type { Lesson as LessonData } from "@/lib/prompts";
+import { shuffle } from "@/lib/shuffle";
 import type { Question } from "@/lib/types";
-import { SocraticButton } from "@/components/SocraticButton";
+import { Lesson } from "@/components/Lesson";
 
 const SECONDS = 20;
 const MAX_QUESTIONS = 15;
@@ -21,20 +22,9 @@ const ANSWER_STYLES = [
 
 // La materia y el tema van en cada pregunta porque el repaso mezcla temas.
 type PlayQuestion = Question & { topics: { title: string; subjects: { name: string } | null } | null };
-// `chosenText` guarda el texto elegido: el índice no sirve fuera de esta partida
-// porque las opciones se barajan en cada una.
 type Result = { question: PlayQuestion; chosen: number | null; chosenText: string | null; correct: boolean; points: number };
 
 const QUESTION_FIELDS = "*, topics(title, subjects(name))";
-
-function shuffle<T>(items: T[]) {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 // Baraja las opciones (también Verdadero/Falso) en la copia que usa el juego, para que
 // el alumno no memorice la posición o el color de la respuesta. La BD no cambia.
@@ -94,10 +84,10 @@ function Game() {
   // En desarrollo, StrictMode ejecuta el efecto dos veces: sin esto se crearían
   // las variantes dos veces.
   const variantsRequested = useRef(false);
-  // Transcripciones de los apuntes por tema, para el tutor socrático.
-  const [notes, setNotes] = useState<Record<string, string[]>>({});
+  // Repaso del tema que se hace siempre antes de jugarlo; null si no hay o falló.
+  const [lesson, setLesson] = useState<LessonData | null>(null);
   const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<"countdown" | "question" | "feedback" | "end">("countdown");
+  const [phase, setPhase] = useState<"lesson" | "countdown" | "question" | "feedback" | "end">(topicId ? "lesson" : "countdown");
   const [countdown, setCountdown] = useState(3);
   const [timeLeft, setTimeLeft] = useState(SECONDS);
   const [results, setResults] = useState<Result[]>([]);
@@ -125,6 +115,25 @@ function Game() {
     }
   }
 
+  // Lee el repaso guardado del tema o lo crea. Si falla, se juega sin repaso.
+  async function loadLesson(): Promise<LessonData | null> {
+    const { data } = await supabase.from("topics").select("lesson").eq("id", topicId).single();
+    if (data?.lesson) return data.lesson as LessonData;
+    setLoadingText("Preparando el repaso del tema…");
+    try {
+      const res = await fetch("/api/lesson", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId }),
+      });
+      if (!res.ok) throw new Error();
+      return ((await res.json()) as { lesson: LessonData }).lesson;
+    } catch {
+      setNotice("No se pudo preparar el repaso: vamos directo al juego");
+      return null;
+    }
+  }
+
   const loadQuestions = useCallback(async () => {
     let qs: PlayQuestion[];
     if (missedMode) {
@@ -146,30 +155,14 @@ function Game() {
       const sample = shuffle((data ?? []) as PlayQuestion[]).slice(0, MAX_QUESTIONS).map(shuffleOptions);
       qs = topicId ? orderByDifficulty(sample) : sample;
     }
+    if (topicId && qs.length) {
+      const l = await loadLesson();
+      setLesson(l);
+      if (!l) setPhase("countdown");
+    }
     setQuestions(qs);
-    // Se cargan ya para que el botón del tutor copie sin esperar a la red (iOS).
-    const topicIds = [...new Set(qs.map((q) => q.topic_id))];
-    if (!topicIds.length) return;
-    const { data: photos } = await supabase
-      .from("photos")
-      .select("topic_id, extracted_text")
-      .in("topic_id", topicIds)
-      .not("extracted_text", "is", null);
-    const byTopic: Record<string, string[]> = {};
-    for (const p of photos ?? []) (byTopic[p.topic_id] ??= []).push(p.extracted_text);
-    setNotes(byTopic);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId, missedMode]);
-
-  function socraticPrompt(r: Result) {
-    return buildSocraticPrompt({
-      subject: r.question.topics?.subjects?.name ?? "",
-      topic: r.question.topics?.title ?? "",
-      question: r.question,
-      chosen: r.chosenText,
-      notes: notes[r.question.topic_id] ?? [],
-    });
-  }
 
   useEffect(() => {
     loadQuestions();
@@ -256,6 +249,10 @@ function Game() {
     );
   }
 
+  if (phase === "lesson" && lesson) {
+    return <Lesson lesson={lesson} onDone={() => setPhase("countdown")} />;
+  }
+
   if (phase === "countdown") {
     return (
       <Screen>
@@ -290,7 +287,6 @@ function Game() {
                     <p className="text-red-300">✕ {r.chosenText}: {r.question.option_feedback[r.chosen]}</p>
                   )}
                   <p className="opacity-80 italic">{r.question.explanation}</p>
-                  <SocraticButton questionId={r.question.id} chosen={r.chosenText} getPrompt={() => socraticPrompt(r)} className="mt-1 rounded-lg bg-white/20 font-bold px-3 py-1" />
                 </div>
               ))}
             </div>
@@ -344,9 +340,6 @@ function Game() {
           )}
           {!last.correct && <p className="font-bold mt-1">Respuesta: {q.options[q.correct_index]}</p>}
           <p className="text-sm mt-1 opacity-95">{q.explanation}</p>
-          {!last.correct && (
-            <SocraticButton questionId={last.question.id} chosen={last.chosenText} getPrompt={() => socraticPrompt(last)} className="mt-3 rounded-xl bg-white/25 font-black px-4 py-2" />
-          )}
         </div>
       )}
 

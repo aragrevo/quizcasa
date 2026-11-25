@@ -109,6 +109,8 @@ export async function POST(request: Request) {
     .from("photos")
     .update({ extracted_text: quiz.transcription })
     .in("id", photos.map((p) => p.id));
+  // Apuntes nuevos: el repaso del tema se vuelve a crear (lo lanza la página del tema).
+  await supabase.from("topics").update({ lesson: null }).eq("id", topicId);
 
   return NextResponse.json({ created: rows.length });
 }

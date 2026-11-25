@@ -6,10 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage } from "@/lib/image";
 import { MAX_MISSED, missCount, type QuestionWithAttempts } from "@/lib/missed";
-import { buildManualPrompt, buildSocraticPrompt, parsePastedQuiz, toQuestionRows } from "@/lib/prompts";
+import { buildManualPrompt, parsePastedQuiz, toQuestionRows } from "@/lib/prompts";
 import type { Photo, Question, Topic } from "@/lib/types";
 import { BackLink, Card, Page, buttonClass, inputClass } from "@/components/ui";
-import { SocraticButton } from "@/components/SocraticButton";
 
 type PhotoWithUrl = Photo & { url?: string };
 type TopicWithSubject = Topic & { subjects: { name: string } | null };
@@ -95,24 +94,24 @@ export default function TopicPage() {
     const body = await res.json().catch(() => ({ error: "Error inesperado" }));
     setGenerating(false);
     setMessage(res.ok ? `✨ ${body.created} preguntas nuevas. Revísalas abajo.` : body.error);
+    if (res.ok) prepareLesson();
     load();
+  }
+
+  // Con apuntes nuevos el repaso cambia: se crea ya, en segundo plano, para que
+  // esté listo al jugar. Si falla, el juego lo vuelve a intentar.
+  function prepareLesson() {
+    fetch("/api/lesson", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topicId: id }),
+    }).catch(() => {});
   }
 
   async function copyPrompt() {
     await navigator.clipboard.writeText(buildManualPrompt(topic?.subjects?.name ?? "", topic!.title));
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-  }
-
-  // Fuera del juego no se sabe qué opción eligió: el tutor le pregunta qué respondería.
-  function socraticPrompt(q: Question) {
-    return buildSocraticPrompt({
-      subject: topic?.subjects?.name ?? "",
-      topic: topic!.title,
-      question: q,
-      chosen: null,
-      notes: photos.flatMap((p) => (p.extracted_text ? [p.extracted_text] : [])),
-    });
   }
 
   async function importPasted() {
@@ -126,6 +125,8 @@ export default function TopicPage() {
       const newPhotoIds = photos.filter((p) => !p.extracted_text).map((p) => p.id);
       if (newPhotoIds.length) {
         await supabase.from("photos").update({ extracted_text: quiz.transcription }).in("id", newPhotoIds);
+        await supabase.from("topics").update({ lesson: null }).eq("id", id);
+        prepareLesson();
       }
       setPasted("");
       setMessage(`✨ ${rows.length} preguntas importadas. Revísalas abajo.`);
@@ -283,7 +284,6 @@ export default function TopicPage() {
                   <div className="flex gap-4 text-sm font-bold">
                     <button onClick={() => setEditing(q.id)} className="text-k-blue">Editar</button>
                     <button onClick={() => deleteQuestion(q.id)} className="text-k-red">Borrar</button>
-                    {misses[q.id] > 0 && <SocraticButton questionId={q.id} chosen={null} getPrompt={() => socraticPrompt(q)} className="ml-auto text-k-yellow" />}
                   </div>
                 </Card>
               ),

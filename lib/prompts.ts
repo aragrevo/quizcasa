@@ -82,58 +82,6 @@ Las fotos van adjuntas. Responde SOLO con un bloque de código JSON con exactame
 \`\`\``;
 }
 
-// Tutor socrático para pegar en Claude.ai cuando el alumno falla una pregunta:
-// le hace razonar hasta llegar él mismo a la respuesta, en vez de dársela.
-export function buildSocraticPrompt({
-  subject,
-  topic,
-  question,
-  chosen,
-  notes,
-}: {
-  subject: string;
-  topic: string;
-  question: Pick<Question, "prompt" | "options" | "correct_index" | "explanation" | "option_feedback">;
-  // Texto de la opción que eligió; null si se le acabó el tiempo o no se sabe.
-  chosen: string | null;
-  // Transcripciones de los apuntes del tema (photos.extracted_text).
-  notes: string[];
-}) {
-  const uniqueNotes = uniqueTexts(notes);
-  // Error típico detrás de la opción que eligió, si la pregunta lo tiene.
-  const chosenFeedback = chosen === null ? "" : (question.option_feedback?.[question.options.indexOf(chosen)] ?? "");
-  const options = question.options.map((o, i) => `${String.fromCharCode(65 + i)}) ${o}`).join("\n");
-  return `Eres un tutor de secundaria (12-15 años) que usa el método socrático. Un alumno acaba de fallar una pregunta de su quiz de estudio. Tu objetivo es que razone hasta llegar ÉL MISMO a la respuesta correcta y la entienda, no que la memorice.
-
-REGLA PRINCIPAL: nunca le des la respuesta directamente, aunque te la pida.
-
-Materia: ${subject}
-Tema: ${topic}
-
-Pregunta:
-${question.prompt}
-
-Opciones:
-${options}
-
-${chosen === null ? "El alumno no respondió: se le acabó el tiempo." : `El alumno eligió: ${chosen}`}
-
-Solo para ti (NO la reveles):
-- Respuesta correcta: ${question.options[question.correct_index]}
-- Explicación: ${question.explanation}${chosenFeedback ? `\n- Error probable detrás de su elección: ${chosenFeedback}` : ""}
-
-${uniqueNotes.length ? `Apuntes que estudió el alumno (transcritos de sus fotos). Básate en ellos y usa sus mismos términos:\n"""\n${uniqueNotes.join("\n\n")}\n"""` : "No hay transcripción de sus apuntes: básate en lo que se enseña en secundaria sobre este tema."}
-
-Cómo llevar la conversación:
-1. Empieza preguntándole por qué eligió esa opción${chosen === null ? " (o qué respondería ahora y por qué)" : ""}.
-2. Haz UNA sola pregunta por mensaje, corta, que le lleve desde su error hacia la idea correcta usando sus apuntes.
-3. Si se atasca 2 o 3 veces seguidas, dale una pista más directa, pero sigue sin decirle la respuesta.
-4. Cuando llegue a la respuesta correcta, pídele que la explique con sus propias palabras.
-5. Para terminar, hazle una pregunta nueva parecida, con otra redacción, para comprobar que lo entendió. Corrígela con él.
-
-Escribe en el mismo idioma que la pregunta y los apuntes (si están en portugués, usa portugués de Portugal y los términos del libro). Tono cercano y animado, mensajes cortos, sin sermones. Empieza ya con tu primera pregunta.`;
-}
-
 // Al importar a mano, todas las fotos de una tanda guardan la misma transcripción.
 function uniqueTexts(texts: string[]) {
   return [...new Set(texts.map((t) => t.trim()).filter(Boolean))];
@@ -182,6 +130,52 @@ Reglas para cada variante:
 - "explanation": 1-2 frases que expliquen por qué la respuesta es correcta.
 ${OPTION_FEEDBACK_RULE}
 - Mismo idioma que las preguntas y los apuntes (si están en portugués, usa portugués de Portugal y los términos del libro).`;
+}
+
+// Repaso corto del tema que se muestra antes de cada partida: una tarjeta por
+// idea clave, con una pregunta de comprobación para que no la pase sin leer.
+export const LessonSchema = z.object({
+  cards: z.array(
+    z.object({
+      title: z.string(),
+      idea: z.string(),
+      example: z.string(),
+      check: z.object({
+        prompt: z.string(),
+        options: z.array(z.string()),
+        correct_index: z.number().int(),
+        explanation: z.string(),
+      }),
+    }),
+  ),
+});
+
+export type Lesson = z.infer<typeof LessonSchema>;
+
+// La app muestra texto plano (Claude.ai sí renderiza Markdown y LaTeX).
+const PLAIN_TEXT_RULE = `Formato: la app solo muestra texto plano. No uses LaTeX ni Markdown (nada de $, \\text, **, # ni listas con -). Escribe las fórmulas con símbolos normales: ×, ÷, ², ³, √, π, ≤, ≥, y las fracciones como 3/4. Ejemplo: Soma = −5 + (−2,5) + 1 + 4,5`;
+
+export function buildLessonPrompt({ subject, topic, notes }: { subject: string; topic: string; notes: string[] }) {
+  return `Eres un profesor de secundaria (12-15 años). Antes de hacer un quiz, tu alumno va a repasar el tema con unas tarjetas cortas en el celular. Prepara ese repaso.
+
+Materia: ${subject}
+Tema: ${topic}
+
+Apuntes del alumno (transcritos de sus fotos):
+"""
+${uniqueTexts(notes).join("\n\n")}
+"""
+
+Reglas:
+- Entre 5 y 8 tarjetas ("cards"), una por idea clave del tema, en orden lógico (de lo básico a lo que se apoya en ello). Cubre lo más importante para el examen.
+- Basa todo SOLO en los apuntes y usa sus mismos términos.
+- "title": la idea en pocas palabras (máximo ~6).
+- "idea": la explicación en 2-3 frases cortas y claras, como se lo explicarías a un alumno de esa edad.
+- "example": un ejemplo concreto, un caso o, si es un ejercicio, un mini ejercicio resuelto paso a paso. Una o dos frases.
+- "check": una pregunta rápida que compruebe que entendió ESA tarjeta (no que la memorizó). "options": 3 opciones, con distractores plausibles (errores típicos), nunca absurdos. "correct_index": posición (desde 0) de la correcta; repártela entre las opciones. "explanation": una frase de por qué es la correcta.
+- Mismo idioma que los apuntes (si están en portugués, usa portugués de Portugal).
+- Tono cercano y animado, sin sermones.
+${PLAIN_TEXT_RULE}`;
 }
 
 // Lee la respuesta pegada desde Claude.ai: tolera texto o bloques \`\`\`json alrededor.

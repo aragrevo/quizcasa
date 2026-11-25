@@ -20,7 +20,7 @@ QuizCasa es una app tipo Kahoot para que un alumno de secundaria estudie: se sub
 
 **Next.js 16 App Router + Supabase, casi todo en el cliente.** Cada página de `app/` es un componente `"use client"` que consulta Supabase directamente desde el navegador con `lib/supabase/client.ts`. No hay capa de datos en el servidor; la autorización la aplica el Row Level Security de Postgres, no el código de la app. Solo hay tres rutas de API:
 - `app/api/generate/route.ts` — el único sitio donde se usa la API key de Anthropic.
-- `app/api/tutor/route.ts` — tutor socrático con Gemini (`GEMINI_API_KEY`, modelo `gemini-3.5-flash`), en streaming de texto plano. Arma el prompt en el servidor con `buildSocraticPrompt` y datos de la BD; el cliente solo envía `questionId`, la opción elegida y los mensajes. Lo abre `components/SocraticButton.tsx`, que ofrece copiar el prompt a Claude.ai si falla.
+- `app/api/lesson/route.ts` — repaso del tema con Gemini (`GEMINI_API_KEY`, modelo `gemini-3.5-flash` en `lib/gemini.ts`): crea desde las transcripciones unas tarjetas (`LessonSchema`/`buildLessonPrompt` de `lib/prompts.ts`) y las guarda en `topics.lesson`. Se pone a `null` cuando entran apuntes nuevos y la página del tema lo vuelve a crear en segundo plano.
 - `app/api/keepalive/route.ts` — llamada diaria de Vercel Cron (`vercel.json`), protegida con `CRON_SECRET`, para que Supabase no pause el proyecto gratis.
 
 **El control de acceso está en `proxy.ts`** (el reemplazo de `middleware.ts` en Next 16). Refresca la cookie de sesión de Supabase y redirige a `/login` las peticiones sin sesión; las rutas públicas son `/login`, `/auth/*` y `/api/keepalive`. Cualquier ruta pública nueva hay que agregarla ahí.
@@ -34,7 +34,7 @@ Cualquier cambio en la forma del quiz o en el prompt debe mantener funcionando a
 
 Las imágenes se reducen a ~1600px JPEG en el navegador (`lib/image.ts`) antes de subirlas.
 
-**Juego** (`app/jugar/page.tsx`): modos por query string — `?tema=<id>` (un tema, de fácil a difícil), `?modo=repaso` (preguntas que tocan hoy) y `?tema=<id>&modo=falladas` (las más falladas de ese tema, `lib/missed.ts`). Máximo 15 preguntas por partida (el prompt pide 18–20 para tener margen). Cada respuesta inserta una fila en `attempts` y actualiza la pregunta con `nextReviewState` de `lib/leitner.ts` (intervalos de 1/3/7/14/30 días, vuelve a la caja 1 al fallar, vence al inicio del día).
+**Juego** (`app/jugar/page.tsx`): modos por query string — `?tema=<id>` (un tema, de fácil a difícil), `?modo=repaso` (preguntas que tocan hoy) y `?tema=<id>&modo=falladas` (las más falladas de ese tema, `lib/missed.ts`). Al jugar un tema (`?tema=`, también `falladas`) primero va un repaso obligatorio (`components/Lesson.tsx`): tarjetas con la idea clave y una pregunta de comprobación; si no se puede crear, se juega sin él. Máximo 15 preguntas por partida (el prompt pide 18–20 para tener margen). Cada respuesta inserta una fila en `attempts` y actualiza la pregunta con `nextReviewState` de `lib/leitner.ts` (intervalos de 1/3/7/14/30 días, vuelve a la caja 1 al fallar, vence al inicio del día).
 
 **Estilos**: Tailwind v4 con los tokens del tema en `app/globals.css` (tema oscuro fijo, colores de respuesta `k-red/blue/yellow/green/purple`, fuente Nunito). Los componentes de UI compartidos están en `components/ui.tsx`.
 
