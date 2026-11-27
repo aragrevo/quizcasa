@@ -1,9 +1,27 @@
-import { ApiError, GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI, type GenerateContentParameters } from "@google/genai";
 import { NextResponse } from "next/server";
 
-// Modelo fijo: el SDK usa la API v1, donde el alias "gemini-flash-latest" no existe (404),
-// y gemini-3.8-flash daba 503 por saturación en noviembre de 2026.
-export const GEMINI_MODEL = "gemini-3.5-flash";
+// Modelos en orden de preferencia. IDs fijos: el SDK usa la API v1, donde el alias
+// "gemini-flash-latest" no existe (404). gemini-4-hydrogen da 503 a menudo por saturación
+// (noviembre de 2026), así que gemini-3.5-flash queda de respaldo. Cada modelo tiene su
+// propia cuota gratis, por eso también se pasa al siguiente con 429.
+const GEMINI_MODELS = ["gemini-4-hydrogen", "gemini-3.5-flash"];
+const FALLBACK_STATUSES = new Set([404, 429, 500, 503]);
+
+// generateContent con el primer modelo que responda; si todos fallan, lanza el último error.
+export async function generateWithFallback(ai: GoogleGenAI, params: Omit<GenerateContentParameters, "model">) {
+  let lastError: unknown;
+  for (const model of GEMINI_MODELS) {
+    try {
+      return await ai.models.generateContent({ ...params, model });
+    } catch (error) {
+      if (!(error instanceof ApiError) || !FALLBACK_STATUSES.has(error.status)) throw error;
+      console.warn("Gemini", model, "falló con", error.status, "; probando el siguiente modelo");
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
 
 // Devuelve el cliente, o una respuesta de error si falta la API key.
 export function geminiClient(): GoogleGenAI | NextResponse {

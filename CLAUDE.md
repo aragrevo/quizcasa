@@ -20,7 +20,7 @@ QuizCasa es una app tipo Kahoot para que un alumno de secundaria estudie: se sub
 
 **Next.js 16 App Router + Supabase, casi todo en el cliente.** Cada página de `app/` es un componente `"use client"` que consulta Supabase directamente desde el navegador con `lib/supabase/client.ts`. No hay capa de datos en el servidor; la autorización la aplica el Row Level Security de Postgres, no el código de la app. Solo hay tres rutas de API:
 - `app/api/generate/route.ts` — el único sitio donde se usa la API key de Anthropic.
-- `app/api/lesson/route.ts` — repaso del tema con Gemini (`GEMINI_API_KEY`, modelo `gemini-3.5-flash` en `lib/gemini.ts`): crea desde las transcripciones unas tarjetas (`LessonSchema`/`buildLessonPrompt` de `lib/prompts.ts`) y las guarda en `topics.lesson`. Se pone a `null` cuando entran apuntes nuevos y la página del tema lo vuelve a crear en segundo plano.
+- `app/api/lesson/route.ts` — repaso del tema con Gemini (`GEMINI_API_KEY`, modelo `gemini-4-hydrogen` con respaldo `gemini-3.5-flash` si da 404/429/500/503, en `generateWithFallback` de `lib/gemini.ts`): crea desde las transcripciones unas tarjetas (`LessonSchema`/`buildLessonPrompt` de `lib/prompts.ts`) y las guarda en `topics.lesson`. Se pone a `null` cuando entran apuntes nuevos y la página del tema lo vuelve a crear en segundo plano.
 - `app/api/keepalive/route.ts` — llamada diaria de Vercel Cron (`vercel.json`), protegida con `CRON_SECRET`, para que Supabase no pause el proyecto gratis.
 
 **El control de acceso está en `proxy.ts`** (el reemplazo de `middleware.ts` en Next 16). Refresca la cookie de sesión de Supabase y redirige a `/login` las peticiones sin sesión; las rutas públicas son `/login`, `/auth/*` y `/api/keepalive`. Cualquier ruta pública nueva hay que agregarla ahí.

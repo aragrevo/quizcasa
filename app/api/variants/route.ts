@@ -2,7 +2,7 @@ import { ThinkingLevel } from "@google/genai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { GEMINI_MODEL, geminiClient, geminiErrorResponse } from "@/lib/gemini";
+import { generateWithFallback, geminiClient, geminiErrorResponse } from "@/lib/gemini";
 import { buildVariantsPrompt, toQuestionRow, VariantsSchema } from "@/lib/prompts";
 import type { Question } from "@/lib/types";
 
@@ -46,8 +46,7 @@ export async function POST(request: Request) {
 
   let text: string | undefined;
   try {
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
+    const response = await generateWithFallback(ai, {
       contents: prompt,
       config: {
         responseMimeType: "application/json",
